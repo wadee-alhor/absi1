@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="ar" dir="rtl" class="h-full">
  <head>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TS STORE</title>
@@ -326,73 +330,6 @@ let paymentMethods = [];
 let currentCategory = null;
 let selectedCurrency = { name: 'دولار أمريكي', symbol: '$', rate: 1 };
 
-// ============== LOCAL STORAGE ==============
-const STORAGE_KEY = 'tsstore_data';
-const SYNC_CHANNEL = 'tsstore_sync';
-
-function saveData() {
-  const data = {
-    users, currentUser, cart, orders, employees, productDiscounts, discountCodes, paymentMethods, products, selectedCurrency
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  // إخبار التبويبات الأخرى بالتحديث
-  const event = new BroadcastChannel(SYNC_CHANNEL);
-  event.postMessage({ type: 'dataUpdated', data });
-}
-
-function loadData() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const data = JSON.parse(saved);
-      users = data.users || [];
-      currentUser = data.currentUser || null;
-      cart = data.cart || [];
-      orders = data.orders || [];
-      employees = data.employees || [];
-      productDiscounts = data.productDiscounts || [];
-      discountCodes = data.discountCodes || [];
-      paymentMethods = data.paymentMethods || [];
-      products = data.products || [];
-      selectedCurrency = data.selectedCurrency || { name: 'دولار أمريكي', symbol: '$', rate: 1 };
-    }
-  } catch (e) {
-    console.log('فشل تحميل البيانات');
-  }
-}
-
-// الاستماع للتحديثات من التبويبات الأخرى
-try {
-  const syncChannel = new BroadcastChannel(SYNC_CHANNEL);
-  syncChannel.onmessage = (event) => {
-    if (event.data.type === 'dataUpdated') {
-      const data = event.data.data;
-      users = data.users || [];
-      cart = data.cart || [];
-      orders = data.orders || [];
-      employees = data.employees || [];
-      productDiscounts = data.productDiscounts || [];
-      discountCodes = data.discountCodes || [];
-      paymentMethods = data.paymentMethods || [];
-      products = data.products || [];
-      selectedCurrency = data.selectedCurrency || selectedCurrency;
-      
-      // تحديث الواجهة إذا كان المستخدم موجود
-      if (currentUser) {
-        updateCartBadge();
-        if (document.getElementById('adminPage') && !document.getElementById('adminPage').classList.contains('hidden')) {
-          renderAdmin();
-        }
-        if (document.getElementById('ordersPage') && !document.getElementById('ordersPage').classList.contains('hidden')) {
-          renderOrders();
-        }
-      }
-    }
-  };
-} catch (e) {
-  console.log('BroadcastChannel غير مدعوم');
-}
-
 const arabCurrencies = [
   { name: 'شيكل إسرائيلي', symbol: '₪', rate: 3.65 },
   { name: 'ريال سعودي', symbol: 'ر.س', rate: 3.75 },
@@ -434,7 +371,6 @@ function handleRegister(e) {
   const user = { name, email, pass, isOwner: false, isEmployee: false };
   users.push(user);
   currentUser = user;
-  saveData();
   enterStore();
 }
 
@@ -446,7 +382,6 @@ function handleLogin(e) {
     let owner = users.find(u => u.email === OWNER_EMAIL);
     if (!owner) { owner = { name: 'Owner', email: OWNER_EMAIL, pass: OWNER_PASS, isOwner: true, isEmployee: false, permissions: {} }; users.push(owner); }
     currentUser = owner;
-    saveData();
     enterStore();
     return;
   }
@@ -455,7 +390,6 @@ function handleLogin(e) {
   const emp = employees.find(e => e.email === email && e.pass === pass);
   if (emp) {
     currentUser = { name: emp.name, email: emp.email, isOwner: false, isEmployee: true, permissions: emp.permissions };
-    saveData();
     enterStore();
     return;
   }
@@ -463,7 +397,6 @@ function handleLogin(e) {
   const user = users.find(u => u.email === email && u.pass === pass);
   if (!user) { showAuthError('البريد أو كلمة المرور غير صحيحة'); return; }
   currentUser = user;
-  saveData();
   enterStore();
 }
 
@@ -621,14 +554,12 @@ function addToCart(id) {
   if (existing) existing.qty++;
   else cart.push({ ...p, qty: 1, finalPrice: price });
   updateCartBadge();
-  saveData();
   showToast('تمت الإضافة للسلة ✅');
 }
 
 function removeFromCart(id) {
   cart = cart.filter(c => c.id !== id);
   updateCartBadge();
-  saveData();
   renderCart();
 }
 
@@ -792,7 +723,6 @@ function completePurchase() {
     status: 'pending'
   };
   orders.push(order);
-  saveData();
 
   if (checkoutData.paymentMethod?.link) {
     window.open(checkoutData.paymentMethod.link, '_blank', 'noopener,noreferrer');
@@ -801,7 +731,6 @@ function completePurchase() {
   cart = [];
   updateCartBadge();
   checkoutData = { discount: 0, discountCode: '', paymentMethod: null, buyerName: '', discordName: '', phone: '' };
-  saveData();
   navigateTo('invoice', order);
 }
 
@@ -856,7 +785,6 @@ function renderCurrencies() {
 
 function setCurrency(name, symbol, rate) {
   selectedCurrency = { name, symbol, rate };
-  saveData();
   renderCurrencies();
   showToast(`تم تغيير العملة إلى ${name} ✅`);
 }
@@ -1094,7 +1022,6 @@ function renderAdmin() {
 
 function updateOrderStatus(i, status) {
   orders[i].status = status;
-  saveData();
   renderAdmin();
   showToast('تم تحديث حالة الطلب ✅');
 }
@@ -1171,7 +1098,6 @@ function addProduct(e) {
   if (discountPercent) {
     productDiscounts.push({ productId: prod.id, percent: discountPercent });
   }
-  saveData();
   closeModal();
   renderAdmin();
   showToast('تمت إضافة المنتج ✅');
@@ -1230,7 +1156,6 @@ function editProduct(e, id) {
     }
   }
   
-  saveData();
   closeModal();
   renderAdmin();
   showToast('تم تحديث المنتج ✅');
@@ -1239,7 +1164,6 @@ function editProduct(e, id) {
 function deleteProduct(id) {
   products = products.filter(p => p.id !== id);
   productDiscounts = productDiscounts.filter(d => d.productId !== id);
-  saveData();
   renderAdmin();
   showToast('تم حذف المنتج');
 }
@@ -1316,7 +1240,6 @@ function addEmployee(e) {
     pass: document.getElementById('empPass').value,
     permissions
   });
-  saveData();
   closeModal();
   renderAdmin();
   showToast('تمت إضافة الموظف ✅');
@@ -1324,7 +1247,6 @@ function addEmployee(e) {
 
 function deleteEmployee(i) {
   employees.splice(i, 1);
-  saveData();
   renderAdmin();
   showToast('تم حذف الموظف');
 }
@@ -1345,7 +1267,6 @@ function showAddDiscountModal() {
 function addDiscount(e) {
   e.preventDefault();
   discountCodes.push({ code: document.getElementById('dcCode').value.trim().toUpperCase(), percent: parseInt(document.getElementById('dcPercent').value) });
-  saveData();
   closeModal();
   renderAdmin();
   showToast('تمت إضافة كود الخصم ✅');
@@ -1353,7 +1274,6 @@ function addDiscount(e) {
 
 function deleteDiscount(i) {
   discountCodes.splice(i, 1);
-  saveData();
   renderAdmin();
   showToast('تم حذف الكود');
 }
@@ -1380,7 +1300,6 @@ function addPaymentMethod(e) {
     link: document.getElementById('pmLink').value.trim(),
     image: document.getElementById('pmImage').value.trim()
   });
-  saveData();
   closeModal();
   renderAdmin();
   showToast('تمت إضافة طريقة الدفع ✅');
@@ -1388,7 +1307,6 @@ function addPaymentMethod(e) {
 
 function deletePayment(i) {
   paymentMethods.splice(i, 1);
-  saveData();
   renderAdmin();
   showToast('تم حذف الطريقة');
 }
@@ -1467,5 +1385,42 @@ if (window.elementSdk) {
 
 lucide.createIcons();
 </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9de7fdf955225daa',t:'MTc3Mzg3NjI4MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+  <!-- محتوى الموقع -->
+
+  <script>
+    // إعداد Firebase
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "SENDER_ID",
+      appId: "APP_ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let usersArray = [];
+    let productsArray = [];
+    let cartArray = [];
+
+    function saveData() {
+      const data = { users: usersArray, products: productsArray, cart: cartArray };
+      db.ref('store').set(data);
+    }
+
+    window.onload = () => {
+      db.ref('store').once('value').then(snapshot => {
+        const data = snapshot.val();
+        if(data){
+          usersArray = data.users || [];
+          productsArray = data.products || [];
+          cartArray = data.cart || [];
+        }
+      });
+    };
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9de7ebfc41535daa',t:'MTc3Mzg3NTU0My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
